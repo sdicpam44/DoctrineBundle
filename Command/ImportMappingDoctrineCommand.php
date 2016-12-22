@@ -22,6 +22,7 @@ use Doctrine\ORM\Mapping\Driver\DatabaseDriver;
 use Doctrine\ORM\Tools\DisconnectedClassMetadataFactory;
 use Doctrine\ORM\Tools\Export\ClassMetadataExporter;
 use Doctrine\ORM\Tools\Console\MetadataFilter;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Import Doctrine ORM metadata mapping information from an existing database.
@@ -40,6 +41,7 @@ class ImportMappingDoctrineCommand extends DoctrineCommand
             ->setName('doctrine:mapping:import')
             ->addArgument('bundle', InputArgument::REQUIRED, 'The bundle to import the mapping information to')
             ->addArgument('mapping-type', InputArgument::OPTIONAL, 'The mapping type to export the imported mapping information to')
+            ->addArgument('extra-config',  InputArgument::OPTIONAL,'Path to an extra config file to alter generated mapping')
             ->addOption('em', null, InputOption::VALUE_OPTIONAL, 'The entity manager to use for this command')
             ->addOption('shard', null, InputOption::VALUE_REQUIRED, 'The shard connection to use for this command')
             ->addOption('filter', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'A string pattern used to match entities that should be mapped.')
@@ -86,6 +88,14 @@ EOT
         if ('yaml' === $type) {
             $type = 'yml';
         }
+        
+        $extraConfig = $input->getArgument('extra-config') ? $input->getArgument('extra-config') : '';
+        
+        $extraConfigArray = [];
+        
+        if(!empty($extraConfig)) {
+           $extraConfigArray = Yaml::parse(file_get_contents($extraConfig));
+        }
 
         $cme = new ClassMetadataExporter();
         $exporter = $cme->getExporter($type);
@@ -107,6 +117,29 @@ EOT
         $cmf = new DisconnectedClassMetadataFactory();
         $cmf->setEntityManager($em);
         $metadata = $cmf->getAllMetadata();
+        
+        
+        //we alter existing metadata using our config file, useful to change fetchmode and collection sorting that can't be deduced from database schema
+       foreach($extraConfigArray as $key => $extraconfItem) {
+                foreach($metadata as $metadataItem) {   
+                   
+                    if($metadataItem->getName() === $key) {
+                            
+                        foreach($extraconfItem as $keyMapping => $mappingItem) {
+                            if($metadataItem->hasAssociation($keyMapping)) {
+                                
+                                $assocMap = $metadataItem->getAssociationMapping($keyMapping);
+                                foreach($mappingItem as $keyField => $field) {
+                                    $assocMap[$keyField] = $field;
+                                }
+                                
+                                $metadataItem->setAssociationOverride($keyMapping,$assocMap);
+                            }
+                        } 
+                    }
+                }
+       }
+        
         $metadata = MetadataFilter::filter($metadata, $input->getOption('filter'));
         if ($metadata) {
             $output->writeln(sprintf('Importing mapping information from "<info>%s</info>" entity manager', $emName));
