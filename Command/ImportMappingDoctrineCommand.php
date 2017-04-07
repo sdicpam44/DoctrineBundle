@@ -45,6 +45,7 @@ class ImportMappingDoctrineCommand extends DoctrineCommand
             ->addOption('em', null, InputOption::VALUE_OPTIONAL, 'The entity manager to use for this command')
             ->addOption('shard', null, InputOption::VALUE_REQUIRED, 'The shard connection to use for this command')
             ->addOption('filter', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'A string pattern used to match entities that should be mapped.')
+            ->addOption('exclude', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'A string pattern used to exclude tables') 
             ->addOption('force', null, InputOption::VALUE_NONE, 'Force to overwrite existing mapping files.')
             ->setDescription('Imports mapping information from an existing database')
             ->setHelp(<<<EOT
@@ -109,6 +110,31 @@ EOT
         $em = $this->getEntityManager($input->getOption('em'), $input->getOption('shard'));
 
         $databaseDriver = new DatabaseDriver($em->getConnection()->getSchemaManager());
+        
+        $tableexclude = $input->getOption('exclude');
+        
+        
+        if(is_array($tableexclude) && count($tableexclude) > 0)
+        {        
+            $regex = '';
+            
+            foreach($tableexclude as $tableex)
+            {
+                if(empty($regex))
+                {
+                    $regex .= $tableex;
+                }
+                else {
+                    $regex .= '|'.$tableex;
+                }
+            }
+            
+            $regex = '/^(?!('.$regex.')).*$/';
+            
+            $em->getConnection()->getConfiguration()->setFilterSchemaAssetsExpression($regex);
+        }
+        
+        
         $em->getConfiguration()->setMetadataDriverImpl($databaseDriver);
 
         $emName = $input->getOption('em');
