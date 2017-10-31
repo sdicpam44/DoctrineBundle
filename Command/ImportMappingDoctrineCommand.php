@@ -152,7 +152,6 @@ EOT
                     if($metadataItem->getName() === $key) {
                             
                         foreach($extraconfItem as $keyMapping => $mappingItem) {
-                            $output->writeln($keyMapping);
                             if($metadataItem->hasAssociation($keyMapping)) {
                                 
                                 $assocMap = $metadataItem->getAssociationMapping($keyMapping);
